@@ -42,22 +42,33 @@ bool NhwcTransformer::IsConvSupportedByXNNPack(const Node& nodeRef, bool input_i
   if (X_input == nullptr || !X_input->has_tensor_type() || !X_input->tensor_type().has_shape() ||
       X_input->tensor_type().elem_type() != ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT)
     return false;
+  std::string auto_pad_str;
+  ORT_RETURN_FALSE_IF_ERROR(info.GetAttr<std::string>("auto_pad", &auto_pad_str));
+  // The "auto_pad_str" string must be either NOTSET, SAME_UPPER, SAME_LOWER or VALID
+  // TF2ONNX converter doesn't use SAME_LOWER.
+  // SAME_UPPER maps to TF SAME padding
+  if (auto_pad_str == "SAME_LOWER") return false;
+
+  if (auto_pad_str == "SAME_UPPER") {
+    std::vector<int64_t> dilations;
+    Status st1 = info.GetAttrs<int64_t>("dilations", dilations);
+    if (dilations.size() != 2) return false;
+    // Don't know how to handle dilation!=1 cases yet. TF doesn't have it.
+    if (dilations[0] != 1 || dilations[1] != 1) return false;
+  }
+
   auto& input_shape = X_input->tensor_type().shape();
   if (input_shape.dim_size() != 4) return false;
-  for (int i = 1; i != 3; ++i) {
-    if (!input_shape.dim(i).has_dim_value()) {
-      return false;
-    }
-  }
+  auto& channel_dim = input_is_nchw ? input_shape.dim(1) : input_shape.dim(3);
+  if (!channel_dim.has_dim_value()) return false;
+
   auto weight_input = weight_node_arg->TypeAsProto();
   TensorShape weight_shape = utils::GetTensorShapeFromTensorShapeProto(weight_input->tensor_type().shape());
   int64_t group = 1;
   ORT_RETURN_FALSE_IF_ERROR(info.GetAttr<int64_t>("group", &group));
   int64_t input_channels = input_is_nchw ? input_shape.dim(1).dim_value() : input_shape.dim(3).dim_value();
   if (group != 1 && group != input_channels) return false;
-  std::string auto_pad_str;
-  ORT_RETURN_FALSE_IF_ERROR(info.GetAttr<std::string>("auto_pad", &auto_pad_str));
-  if (auto_pad_str != "NOTSET" && auto_pad_str != "VALID" && auto_pad_str != "SAME") return false;
+
   std::vector<int64_t> pads;
   Status st = info.GetAttrs<int64_t>("pads", pads);
   if (st.IsOK()) {
@@ -179,7 +190,10 @@ Status NhwcTransformer::ApplyImpl(Graph& graph, bool& modified, int graph_level,
       if (domain != kMSDomain) {
         auto inputs = node->Inputs();
         auto outputs = node->Outputs();
-        auto new_node = api_graph->AddNode("NhwcConv", inputs, outputs.size(), kMSDomain, node->Name());
+        int since_version = node->SinceVersion();
+        auto new_node = api_graph->AddNode("Conv", inputs, outputs.size(), kMSInternalNHWCDomain, node->Name());
+        int new_since_version = new_node->SinceVersion();
+        assert(since_version <= new_since_version);
         for (size_t j = 0; j < outputs.size(); ++j) {
           if (outputs[j] != "") {
             api_graph->MoveOutput(*node, j, *new_node, j);

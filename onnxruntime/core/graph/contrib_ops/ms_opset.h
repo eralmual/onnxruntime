@@ -81,7 +81,11 @@ class OpSet_Microsoft_ver1 {
     fn(GetOpSchema<ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Microsoft, 1, QLinearGlobalAveragePool)>());
     fn(GetOpSchema<ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Microsoft, 1, QLinearAveragePool)>());
     fn(GetOpSchema<ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Microsoft, 1, QLinearConv)>());
-    fn(GetOpSchema<ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Microsoft, 1, NhwcConv)>());
+
+    ::ONNX_NAMESPACE::OpSchema conv1 = ::ONNX_NAMESPACE::GetOpSchema<::ONNX_NAMESPACE::ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Onnx, 1, Conv)>();
+    fn(std::move(conv1.TypeAndShapeInferenceFunction(nullptr).SetDomain(onnxruntime::kMSInternalNHWCDomain)));
+    ::ONNX_NAMESPACE::OpSchema conv11 = ::ONNX_NAMESPACE::GetOpSchema<::ONNX_NAMESPACE::ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Onnx, 11, Conv)>();
+    fn(std::move(conv11.TypeAndShapeInferenceFunction(nullptr).SetDomain(onnxruntime::kMSInternalNHWCDomain)));
 
     fn(GetOpSchema<ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Microsoft, 1, DequantizeLinear)>());
     fn(GetOpSchema<ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Microsoft, 1, DynamicQuantizeLSTM)>());

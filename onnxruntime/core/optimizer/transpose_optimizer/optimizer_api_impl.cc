@@ -656,13 +656,14 @@ static const std::unordered_map<std::string, std::vector<int>> onnx_ops_availabl
     {"Gather", {1, 11, 13}},
     {"Transpose", {1, 13}},
     {"Identity", {1, 13, 14, 16}},
+    {"Conv", {1, 11}},
 };
 
 // Based on the opset version imported for this model, returns the since version for the node.
 static int GetSinceVersionForNewOp(std::string_view op_type, std::string_view domain,
                                    const std::unordered_map<std::string, int>& domain_to_version_map) {
   int since_version = -1;
-  ORT_ENFORCE(domain == kOnnxDomain || domain == kMSDomain, "Transpose optimizer is expected to add only onnx and ms domain ops. Domain: ",
+  ORT_ENFORCE(domain == kOnnxDomain || domain == kMSDomain || domain == kMSInternalNHWCDomain, "Transpose optimizer is expected to add only onnx and ms domain ops. Domain: ",
               domain, " provided for op: ", op_type);
   if (domain == kMSDomain) return 1;
   auto opset_import_iter = domain_to_version_map.find(std::string(domain));
