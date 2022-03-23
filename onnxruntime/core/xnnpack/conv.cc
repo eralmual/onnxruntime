@@ -2,14 +2,12 @@
 // Licensed under the MIT License.
 
 #include "core/xnnpack/conv.h"
+#include "core/xnnpack/shape_helper.h"
 
 #include "core/common/safeint.h"
 #include "core/xnnpack/build_kernel_info.h"
 #include "core/xnnpack/schema/xnnpack_onnx_defs.h"
 #include "core/framework/tensorprotoutils.h"
-
-#define XNNPACK_CPU_MS_DOMAIN_OPERATOR_KERNEL(name, ver, builder, ...) \
-  ONNX_OPERATOR_KERNEL_EX(name, kXNNPackDomain, ver, kCpuExecutionProvider, builder, __VA_ARGS__)
 
 namespace onnxruntime {
 namespace xnnpack {
@@ -50,14 +48,6 @@ Status XnnPackConvShapeInferKernelImpl(const TensorShape& input_shape,
   return Status::OK();
 }
 
-static bool IsAllDimKnown(const TensorShape& s) {
-  size_t len = s.NumDimensions();
-  for (size_t i = 0; i != len; ++i) {
-    if (s[i] < 0) return false;
-  }
-  return true;
-}
-
 Convolution2d::Convolution2d(const OpKernelInfo& info) : OpKernel(info) {
   const Tensor* weight = nullptr;
   const Tensor* B = nullptr;
@@ -66,18 +56,22 @@ Convolution2d::Convolution2d(const OpKernelInfo& info) : OpKernel(info) {
 
   ORT_ENFORCE(input_type_proto != nullptr && input_type_proto->has_tensor_type() &&
               input_type_proto->tensor_type().has_shape());
-  ORT_ENFORCE(output_type_proto != nullptr && output_type_proto->has_tensor_type() &&
-              output_type_proto->tensor_type().has_shape());
 
-  output_shape_ = utils::GetTensorShapeFromTensorShapeProto(output_type_proto->tensor_type().shape());
-  has_const_output_shape_ = IsAllDimKnown(output_shape_);
+  if (output_type_proto != nullptr && output_type_proto->has_tensor_type() && output_type_proto->tensor_type().has_shape()) {
+    output_shape_ = utils::GetTensorShapeFromTensorShapeProto(output_type_proto->tensor_type().shape());
+    has_const_output_shape_ = IsAllDimKnown(output_shape_);
+  } else {
+    // It's ok. We will infer it in this->Compute() function.
+    has_const_output_shape_ = false;
+  }
 
   ORT_ENFORCE(info.TryGetConstantInput(1, &weight));
   ORT_ENFORCE(info.TryGetConstantInput(2, &B));
 
   int64_t input_channels = input_type_proto->tensor_type().shape().dim(3).dim_value();
-  int64_t output_channels = output_type_proto->tensor_type().shape().dim(3).dim_value();
   const TensorShape& kernel_shape = weight->Shape();
+  int64_t output_channels = kernel_shape[0];
+
   int64_t kernel_height = kernel_shape[1];
   int64_t kernel_width = kernel_shape[2];
 

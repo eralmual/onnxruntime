@@ -232,6 +232,42 @@ ONNX_XNNPACK_OPERATOR_SET_SCHEMA(
           }
         }));
 
+ONNX_XNNPACK_OPERATOR_SET_SCHEMA(
+    XnnPackMaxPooling2d, 1,
+    OpSchema()
+        .Input(0, "X", "", "T")
+        .Output(0, "Y", "", "T")
+        .TypeConstraint("T",
+                        {"tensor(float16)", "tensor(float)", "tensor(double)", "tensor(int8)", "tensor(int16)",
+                         "tensor(int32)", "tensor(int64)", "tensor(uint8)", "tensor(uint16)", "tensor(uint32)",
+                         "tensor(uint64)", "tensor(bool)", "tensor(string)", "tensor(bfloat16)"},
+                        "")
+        .Attr("input_padding_top", "Implicit zero-padding above 2D input data. Must be 0 if padding mode is SAME",
+              AttributeProto::INT, static_cast<int64_t>(0))
+        .Attr("input_padding_right",
+              "Implicit zero-padding to the right of 2D input data. Must be 0 if padding mode is SAME",
+              AttributeProto::INT, static_cast<int64_t>(0))
+        .Attr("input_padding_bottom", "Implicit zero-padding below 2D input data. Must be 0 if padding mode is SAME",
+              AttributeProto::INT, static_cast<int64_t>(0))
+        .Attr("input_padding_left",
+              "Implicit zero-padding to the left of 2D input data. Must be 0 if padding mode is SAME",
+              AttributeProto::INT, static_cast<int64_t>(0))
+        .Attr("pooling_height", "Pooling (kernel) height.", AttributeProto::INT)
+        .Attr("pooling_width", "Pooling (kernel) width.", AttributeProto::INT)
+        .Attr("stride_height",
+              "Displacing of the pooling window in the vertical dimension of the input pixels corresponding to "
+              "vertically adjacent output pixels.",
+              AttributeProto::INT)
+        .Attr("stride_width",
+              "Displacing of the pooling window in the horizontal dimension of the input pixels corresponding to "
+              "horizontally adjacent output pixels.",
+              AttributeProto::INT)
+        .Attr("dilation_height", "Dilation of pooling elements along the height dimension.", AttributeProto::INT)
+        .Attr("dilation_width", "Dilation of pooling elements along the width dimension.", AttributeProto::INT)
+        .Attr("padding_mode", "0:VALID. 1:SAME.", AttributeProto::INT)
+        .Attr("output_min", "output_min", AttributeProto::FLOAT, -INFINITY)
+        .Attr("output_max", "output_max", AttributeProto::FLOAT, INFINITY));
+
 // Compare to the signatures of xnn_define_convolution_2d function, this schema doesn't have
 // 1. kernel_height. Because it is just a dimension size of the weights
 // 2. kernel_width. Because it is just a dimension size of the weights

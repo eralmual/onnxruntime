@@ -8,7 +8,10 @@
 #include "core/optimizer/utils.h"
 #include "core/optimizer/transpose_optimizer/optimizer_utils.h"
 #include "core/framework/op_node_proto_helper.h"
-
+#ifdef USE_XNNPACK
+#include "core/providers/cpu/nn/pool_attributes.h"
+#include "core/providers/common.h"
+#endif
 using namespace ONNX_NAMESPACE;
 using namespace ::onnxruntime::common;
 using namespace onnx_layout_transformation;
@@ -22,9 +25,34 @@ using namespace onnx_layout_transformation;
 
 namespace onnxruntime {
 #ifdef USE_XNNPACK
+static bool IsPaddingTypeSupported(AutoPadType auto_pad) {
+  return auto_pad == AutoPadType::NOTSET || auto_pad == AutoPadType::VALID || auto_pad == AutoPadType::SAME_UPPER;
+}
+
+bool NhwcTransformer::IsMaxPoolSupportedByXNNPack(const Node& nodeRef, bool input_is_nchw) {
+  if (nodeRef.OpType() != "MaxPool") return false;
+  auto input_defs = nodeRef.InputDefs();
+  if (input_defs.size() != 1) return false;
+  auto X_input = input_defs[0]->TypeAsProto();
+  if (X_input == nullptr || !X_input->has_tensor_type() || !X_input->tensor_type().has_shape())
+    return false;
+  int32_t etype = X_input->tensor_type().elem_type();
+  // Currently we only implemented a f32 kernel
+  // if (etype != ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT && etype != ONNX_TENSOR_ELEMENT_DATA_TYPE_INT8 && etype != ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT8) return false;
+  if (etype != ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT) return false;
+  ProtoHelperNodeContext nc(nodeRef);
+  OpNodeProtoHelper info(&nc);
+  PoolAttributes pool_attrs(info, "MaxPool", nodeRef.SinceVersion());
+  if (!IsPaddingTypeSupported(pool_attrs.auto_pad)) return false;
+  auto& input_shape = X_input->tensor_type().shape();
+  if (input_shape.dim_size() != 4) return false;
+  auto& channel_dim = input_is_nchw ? input_shape.dim(1) : input_shape.dim(3);
+  if (!channel_dim.has_dim_value()) return false;
+  return true;
+}
 // This function runs before and after NhwcTransformer
 bool NhwcTransformer::IsConvSupportedByXNNPack(const Node& nodeRef, bool input_is_nchw) {
-  if (nodeRef.OpType() != "Conv" && nodeRef.OpType() != "NhwcConv") return false;
+  if (nodeRef.OpType() != "Conv") return false;
   // Conv has either 2 or 3 inputs.
   auto input_defs = nodeRef.InputDefs();
   if (input_defs.size() != 2 && input_defs.size() != 3) return false;
@@ -44,12 +72,12 @@ bool NhwcTransformer::IsConvSupportedByXNNPack(const Node& nodeRef, bool input_i
     return false;
   std::string auto_pad_str;
   ORT_RETURN_FALSE_IF_ERROR(info.GetAttr<std::string>("auto_pad", &auto_pad_str));
+  AutoPadType padding_type = StringToAutoPadType(auto_pad_str);
+  if (!IsPaddingTypeSupported(padding_type)) return false;
   // The "auto_pad_str" string must be either NOTSET, SAME_UPPER, SAME_LOWER or VALID
   // TF2ONNX converter doesn't use SAME_LOWER.
   // SAME_UPPER maps to TF SAME padding
-  if (auto_pad_str == "SAME_LOWER") return false;
-
-  if (auto_pad_str == "SAME_UPPER") {
+  if (padding_type == AutoPadType::SAME_UPPER) {
     std::vector<int64_t> dilations;
     Status st1 = info.GetAttrs<int64_t>("dilations", dilations);
     if (dilations.size() != 2) return false;
@@ -207,6 +235,28 @@ Status NhwcTransformer::ApplyImpl(Graph& graph, bool& modified, int graph_level,
         api_graph->RemoveNode(*node);
       }
 
+      modified = true;
+    } else if (IsMaxPoolSupportedByXNNPack(NodeFromApiNode(*node), true)) {
+      auto domain = node->Domain();
+      // Skip if domain is incorrect
+      if (domain != kOnnxDomain && domain != kOnnxDomainAlias) {
+        continue;
+      }
+      auto inputdefs = NodeFromApiNode(*node).InputDefs();
+      if (inputdefs.size() != 1) continue;
+
+      // Skip if unknown rank
+      auto shape = inputdefs[0]->Shape();
+      if (shape == nullptr) {
+        continue;
+      }
+
+      // Convert to channels last
+      size_t rank = shape->dim_size();
+      std::vector<int64_t> input_perm = onnx_layout_transformation::ChannelFirstToLastPerm(rank);
+      std::vector<int64_t> output_perm = onnx_layout_transformation::ChannelLastToFirstPerm(rank);
+      onnx_layout_transformation::WrapTransposesAroundNode(*api_graph, *node, {&input_perm}, {&output_perm});
+      onnx_layout_transformation::SwapNodeOpTypeAndDomain(*api_graph, *node, "MaxPool", kMSInternalNHWCDomain);
       modified = true;
     }
 #endif

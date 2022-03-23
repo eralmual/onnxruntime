@@ -11,6 +11,7 @@
 #include "core/optimizer/utils.h"
 #include "core/optimizer/transpose_optimizer/optimizer_utils.h"
 #include "core/optimizer/nhwc_transformer.h"
+#include "core/providers/cpu/nn/pool_attributes.h"
 
 using namespace ONNX_NAMESPACE;
 using namespace ::onnxruntime::common;
@@ -21,20 +22,59 @@ namespace onnxruntime {
 Status XNNPackTransformer::ApplyImpl(Graph& main_graph, bool& modified, int /* graph_level */, const logging::Logger&) const {
   GraphViewer gv(main_graph);
   std::vector<NodeIndex> conv_nodes;
+  std::vector<NodeIndex> maxpool_nodes;
   for (auto& nodeRef : gv.Nodes()) {
-    if (!NhwcTransformer::IsConvSupportedByXNNPack(nodeRef, false)) continue;
-    if (nodeRef.Domain() != onnxruntime::kMSInternalNHWCDomain || nodeRef.OpType() != "Conv") continue;
-    conv_nodes.push_back(nodeRef.Index());
+    if (!NhwcTransformer::IsConvSupportedByXNNPack(nodeRef, false) &&
+        !NhwcTransformer::IsMaxPoolSupportedByXNNPack(nodeRef, false)) continue;
+    if (nodeRef.Domain() != onnxruntime::kMSInternalNHWCDomain) continue;
+    if (nodeRef.OpType() == "Conv")
+      conv_nodes.push_back(nodeRef.Index());
+    else if (nodeRef.OpType() == "MaxPool")
+      maxpool_nodes.push_back(nodeRef.Index());
   }
   // Any error below is fatal, because if XNNPack couldn't run the node, we shouldn't convert it Nhwc.
+  for (NodeIndex ni : maxpool_nodes) {
+    Node* node_p = main_graph.GetNode(ni);
+    if (node_p == nullptr)
+      continue;
+    Node& nodeRef = *node_p;
+    ProtoHelperNodeContext nc(nodeRef);
+    OpNodeProtoHelper info(&nc);
+    PoolAttributes pool_attrs(info, "MaxPool", node_p->SinceVersion());
+    Node& new_node = main_graph.AddNode(node_p->Name(), "XnnPackMaxPooling2d", "", node_p->MutableInputDefs(),
+                                        node_p->MutableOutputDefs(), nullptr, "com.microsoft.xnnpack");
+    new_node.AddAttribute("input_padding_top", pool_attrs.pads[0]);
+    new_node.AddAttribute("input_padding_right", pool_attrs.pads[3]);
+    new_node.AddAttribute("input_padding_bottom", pool_attrs.pads[2]);
+    new_node.AddAttribute("input_padding_left", pool_attrs.pads[1]);
+
+    new_node.AddAttribute("pooling_height", pool_attrs.kernel_shape[0]);
+    new_node.AddAttribute("pooling_width", pool_attrs.kernel_shape[1]);
+
+    new_node.AddAttribute("stride_height", pool_attrs.strides[0]);
+    new_node.AddAttribute("stride_width", pool_attrs.strides[1]);
+
+    new_node.AddAttribute("dilation_height", pool_attrs.dilations[0]);
+    new_node.AddAttribute("dilation_width", pool_attrs.dilations[1]);
+    if (pool_attrs.auto_pad == AutoPadType::SAME_UPPER) {
+      new_node.AddAttribute("padding_mode", static_cast<int64_t>(1));
+    } else {
+      new_node.AddAttribute("padding_mode", static_cast<int64_t>(0));
+    }
+    modified = true;
+
+    if (!main_graph.RemoveNode(ni)) {
+      return Status(ONNXRUNTIME, FAIL, "remove node failed");
+    }
+  }
   for (NodeIndex ni : conv_nodes) {
     Node* node_p = main_graph.GetNode(ni);
     if (node_p == nullptr)
       continue;
     Node& nodeRef = *node_p;
     ProtoHelperNodeContext nc(nodeRef);
-    int64_t group = 1;
     OpNodeProtoHelper info(&nc);
+    int64_t group = 1;
     ORT_RETURN_IF_ERROR(info.GetAttr<int64_t>("group", &group));
     auto X_input = info.GetInputType(0);
     auto weight_input = info.GetInputType(1);
