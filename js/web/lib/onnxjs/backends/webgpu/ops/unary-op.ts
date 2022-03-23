@@ -5,7 +5,7 @@ import {Tensor} from '../../../tensor';
 import {WebGpuInferenceHandler} from '../inference-handler';
 import {GpuDataType} from '../types';
 
-export const abs = (handler: WebGpuInferenceHandler, inputs: Tensor[]): Tensor[] => handler.run(
+export const abs = async(handler: WebGpuInferenceHandler, inputs: Tensor[]): Promise<Tensor[]> => handler.run(
     {
       name: 'Abs',
       inputTypes: [GpuDataType.default],
