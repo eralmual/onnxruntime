@@ -8,11 +8,9 @@
 namespace onnxruntime {
 namespace contrib {
 //NHWC ops
-class ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Microsoft, 1, NhwcMaxPool);
 class ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Microsoft, 1, QLinearGlobalAveragePool);
 class ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Microsoft, 1, QLinearAveragePool);
 class ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Microsoft, 1, QLinearConv);
-class ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Microsoft, 1, NhwcConv);
 
 //Quantization ops
 class ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Microsoft, 1, DequantizeLinear);
@@ -77,16 +75,38 @@ class ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Microsoft, 1, WordConvEmbedding);
 class OpSet_Microsoft_ver1 {
  public:
   static void ForEachSchema(std::function<void(ONNX_NAMESPACE::OpSchema&&)> fn) {
-    fn(GetOpSchema<ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Microsoft, 1, NhwcMaxPool)>());
     fn(GetOpSchema<ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Microsoft, 1, QLinearGlobalAveragePool)>());
     fn(GetOpSchema<ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Microsoft, 1, QLinearAveragePool)>());
     fn(GetOpSchema<ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Microsoft, 1, QLinearConv)>());
 
-    ::ONNX_NAMESPACE::OpSchema conv1 = ::ONNX_NAMESPACE::GetOpSchema<::ONNX_NAMESPACE::ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Onnx, 1, Conv)>();
-    fn(std::move(conv1.TypeAndShapeInferenceFunction(nullptr).SetDomain(onnxruntime::kMSInternalNHWCDomain)));
-    ::ONNX_NAMESPACE::OpSchema conv11 = ::ONNX_NAMESPACE::GetOpSchema<::ONNX_NAMESPACE::ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Onnx, 11, Conv)>();
-    fn(std::move(conv11.TypeAndShapeInferenceFunction(nullptr).SetDomain(onnxruntime::kMSInternalNHWCDomain)));
-
+    {
+      ::ONNX_NAMESPACE::OpSchema maxPool1 = ::ONNX_NAMESPACE::GetOpSchema<::ONNX_NAMESPACE::ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Onnx, 1, MaxPool)>();
+      fn(std::move(maxPool1.TypeAndShapeInferenceFunction(nullptr).SetDomain(onnxruntime::kMSInternalNHWCDomain)));
+      ::ONNX_NAMESPACE::OpSchema maxPool8 = ::ONNX_NAMESPACE::GetOpSchema<::ONNX_NAMESPACE::ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Onnx, 8, MaxPool)>();
+      fn(std::move(maxPool8.TypeAndShapeInferenceFunction(nullptr).SetDomain(onnxruntime::kMSInternalNHWCDomain)));
+      ::ONNX_NAMESPACE::OpSchema maxPool10 = ::ONNX_NAMESPACE::GetOpSchema<::ONNX_NAMESPACE::ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Onnx, 10, MaxPool)>();
+      fn(std::move(maxPool10.TypeAndShapeInferenceFunction(nullptr).SetDomain(onnxruntime::kMSInternalNHWCDomain)));
+      ::ONNX_NAMESPACE::OpSchema maxPool11 = ::ONNX_NAMESPACE::GetOpSchema<::ONNX_NAMESPACE::ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Onnx, 11, MaxPool)>();
+      fn(std::move(maxPool11.TypeAndShapeInferenceFunction(nullptr).SetDomain(onnxruntime::kMSInternalNHWCDomain)));
+      ::ONNX_NAMESPACE::OpSchema maxPool12 = ::ONNX_NAMESPACE::GetOpSchema<::ONNX_NAMESPACE::ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Onnx, 12, MaxPool)>();
+      fn(std::move(maxPool12.TypeAndShapeInferenceFunction(nullptr).SetDomain(onnxruntime::kMSInternalNHWCDomain)));
+    }
+    {
+      ::ONNX_NAMESPACE::OpSchema averagePool1 = ::ONNX_NAMESPACE::GetOpSchema<::ONNX_NAMESPACE::ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Onnx, 1, AveragePool)>();
+      fn(std::move(averagePool1.TypeAndShapeInferenceFunction(nullptr).SetDomain(onnxruntime::kMSInternalNHWCDomain)));
+      ::ONNX_NAMESPACE::OpSchema averagePool7 = ::ONNX_NAMESPACE::GetOpSchema<::ONNX_NAMESPACE::ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Onnx, 7, AveragePool)>();
+      fn(std::move(averagePool7.TypeAndShapeInferenceFunction(nullptr).SetDomain(onnxruntime::kMSInternalNHWCDomain)));
+      ::ONNX_NAMESPACE::OpSchema averagePool10 = ::ONNX_NAMESPACE::GetOpSchema<::ONNX_NAMESPACE::ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Onnx, 10, AveragePool)>();
+      fn(std::move(averagePool10.TypeAndShapeInferenceFunction(nullptr).SetDomain(onnxruntime::kMSInternalNHWCDomain)));
+      ::ONNX_NAMESPACE::OpSchema averagePool11 = ::ONNX_NAMESPACE::GetOpSchema<::ONNX_NAMESPACE::ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Onnx, 11, AveragePool)>();
+      fn(std::move(averagePool11.TypeAndShapeInferenceFunction(nullptr).SetDomain(onnxruntime::kMSInternalNHWCDomain)));
+    }
+    {
+      ::ONNX_NAMESPACE::OpSchema conv1 = ::ONNX_NAMESPACE::GetOpSchema<::ONNX_NAMESPACE::ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Onnx, 1, Conv)>();
+      fn(std::move(conv1.TypeAndShapeInferenceFunction(nullptr).SetDomain(onnxruntime::kMSInternalNHWCDomain)));
+      ::ONNX_NAMESPACE::OpSchema conv11 = ::ONNX_NAMESPACE::GetOpSchema<::ONNX_NAMESPACE::ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Onnx, 11, Conv)>();
+      fn(std::move(conv11.TypeAndShapeInferenceFunction(nullptr).SetDomain(onnxruntime::kMSInternalNHWCDomain)));
+    }
     fn(GetOpSchema<ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Microsoft, 1, DequantizeLinear)>());
     fn(GetOpSchema<ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Microsoft, 1, DynamicQuantizeLSTM)>());
     fn(GetOpSchema<ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Microsoft, 1, DynamicQuantizeMatMul)>());

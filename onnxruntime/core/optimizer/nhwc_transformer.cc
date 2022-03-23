@@ -93,7 +93,9 @@ Status NhwcTransformer::ApplyImpl(Graph& graph, bool& modified, int graph_level,
     ORT_RETURN_IF_ERROR(Recurse(node, modified, graph_level, logger));
   }
 #else
-  // Run constant propagation for XNNPack EP
+  // Run constant propagation for XNNPack EP. XNNPack expects that weights are constant.
+  // Here we expect a constant folding optimizer will be invoked at least once after this NhwcTransformer and
+  // XNNPackTransformer. So I can't register XNNPack Optimizer before the constant folding optimizer.
   std::unordered_set<const NodeArg*> graph_const_values;
 
   for (auto index : graph_viewer.GetNodesInTopologicalOrder()) {
@@ -187,13 +189,15 @@ Status NhwcTransformer::ApplyImpl(Graph& graph, bool& modified, int graph_level,
       std::vector<int64_t> output_perm = onnx_layout_transformation::ChannelLastToFirstPerm(rank);
       onnx_layout_transformation::WrapTransposesAroundNode(*api_graph, *node, {&input_perm}, {&output_perm});
 
-      if (domain != kMSDomain) {
+      if (domain != kMSInternalNHWCDomain) {
         auto inputs = node->Inputs();
         auto outputs = node->Outputs();
-        int since_version = node->SinceVersion();
         auto new_node = api_graph->AddNode("Conv", inputs, outputs.size(), kMSInternalNHWCDomain, node->Name());
+#ifndef NDEBUG
+        int since_version = node->SinceVersion();
         int new_since_version = new_node->SinceVersion();
         assert(since_version <= new_since_version);
+#endif
         for (size_t j = 0; j < outputs.size(); ++j) {
           if (outputs[j] != "") {
             api_graph->MoveOutput(*node, j, *new_node, j);

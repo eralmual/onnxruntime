@@ -131,7 +131,7 @@ TEST(NhwcTransformerTests, ConvMaxPool) {
     auto check_nhwc_graph = [&](InferenceSessionWrapper& session) {
       auto op_to_count = CountOpsInGraph(session.GetGraph());
       EXPECT_EQ(op_to_count["com.microsoft.QLinearConv"], 1);
-      EXPECT_EQ(op_to_count["com.microsoft.NhwcMaxPool"], 1);
+      EXPECT_EQ(op_to_count["com.ms.internal.nhwc.MaxPool"], 1);
       EXPECT_EQ(op_to_count["Transpose"], 2);
     };
 

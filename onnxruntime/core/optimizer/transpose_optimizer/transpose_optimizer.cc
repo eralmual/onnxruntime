@@ -1613,8 +1613,7 @@ static bool HandleMaxPool(HandlerArgs& args) {
     return false;
   }
 
-  auto new_node = SwapNodeOpTypeAndDomain(args.ctx.graph, args.node, "NhwcMaxPool", "com.microsoft");
-  new_node->ClearAttribute("storage_order");  // Only relevant for indices output. Prohibited for NhwcMaxPool.
+  auto new_node = SwapNodeOpTypeAndDomain(args.ctx.graph, args.node, "MaxPool", "com.ms.internal.nhwc");
   TransposeFirstInput(args.ctx, *new_node, args.perm_inv);
   TransposeOutputs(args.ctx, *new_node, args.perm);
   return true;

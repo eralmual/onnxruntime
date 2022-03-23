@@ -108,21 +108,6 @@ void convPoolShapeInferenceNhwc(InferenceContext& ctx, bool use_dilation, bool r
   nhwc_ctx.TransposeOutputShape();
 }
 
-ONNX_MS_OPERATOR_SET_SCHEMA(NhwcMaxPool, 1,
-                            OpSchema()
-                                .Input(0, "x", "", "T")
-                                .Output(0, "y", "", "T")
-                                .TypeConstraint("T", {"tensor(int8)", "tensor(uint8)"}, "")
-                                .Attr("auto_pad", "", AttributeProto::STRING, std::string("NOTSET"))
-                                .Attr("kernel_shape", "", AttributeProto::INTS)
-                                .Attr("dilations", "", AttributeProto::INTS, OPTIONAL_VALUE)
-                                .Attr("strides", "", AttributeProto::INTS, OPTIONAL_VALUE)
-                                .Attr("pads", "", AttributeProto::INTS, OPTIONAL_VALUE)
-                                .Attr("ceil_mode", "", AttributeProto::INT, static_cast<int64_t>(0))
-                                .TypeAndShapeInferenceFunction([](InferenceContext& ctx) {
-                                  propagateElemTypeFromInputToOutput(ctx, 0, 0);
-                                  ::onnxruntime::contrib::convPoolShapeInferenceNhwc(ctx, true, true, 0, 1);
-                                }));
 
 ONNX_MS_OPERATOR_SET_SCHEMA(QLinearGlobalAveragePool, 1,
                             OpSchema()
