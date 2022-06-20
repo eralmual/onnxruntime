@@ -454,6 +454,13 @@ def parse_arguments():
         'e.g. --dnnl_opencl_root "C:/Program Files (x86)/IntelSWTools/sw_dev_tools/OpenCL/sdk"',
     )
     parser.add_argument(
+        "--dnnl_thread",
+        action="store",
+        default="ort",
+        choices=["openmp", "eigen", "ort"],
+        help="Specify the CPU runtime you want to use for oneDNN provider" "e.g. --dnnl_thread openmp",
+    )
+    parser.add_argument(
         "--use_openvino",
         nargs="?",
         const="CPU_FP32",
@@ -830,6 +837,9 @@ def generate_build_tree(
         "-Donnxruntime_BUILD_SHARED_LIB=" + ("ON" if args.build_shared_lib else "OFF"),
         "-Donnxruntime_BUILD_APPLE_FRAMEWORK=" + ("ON" if args.build_apple_framework else "OFF"),
         "-Donnxruntime_USE_DNNL=" + ("ON" if args.use_dnnl else "OFF"),
+        "-Donnxruntime_DNNL_GPU_RUNTIME=" + (args.dnnl_gpu_runtime if args.use_dnnl else ""),
+        "-Donnxruntime_DNNL_OPENCL_ROOT=" + (args.dnnl_opencl_root if args.use_dnnl else ""),
+        "-Donnxruntime_DNNL_THREAD=" + (args.dnnl_thread if args.use_dnnl else ""),
         "-Donnxruntime_USE_NNAPI_BUILTIN=" + ("ON" if args.use_nnapi else "OFF"),
         "-Donnxruntime_USE_RKNPU=" + ("ON" if args.use_rknpu else "OFF"),
         "-Donnxruntime_USE_NUPHAR_TVM=" + ("ON" if args.use_nuphar else "OFF"),

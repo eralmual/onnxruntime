@@ -373,10 +373,7 @@ class ThreadPool {
   // StartProfiling and StopProfiling are not to be consumed as public-facing API
   static void StartProfiling(concurrency::ThreadPool* tp);
   static std::string StopProfiling(concurrency::ThreadPool* tp);
-
- private:
-  friend class LoopCounter;
-
+  
   // Returns the number of threads created in the pool.  This may be different from the
   // value returned by DegreeOfParallelism to code using the pool.
   int NumThreads() const;
@@ -384,6 +381,9 @@ class ThreadPool {
   // Returns current thread id between 0 and NumThreads() - 1, if called from a
   // thread in the pool. Returns -1 otherwise.
   int CurrentThreadId() const;
+
+ private:
+  friend class LoopCounter;
 
   // Run fn with up to n degree-of-parallelism enlisting the thread pool for
   // help.  The degree-of-parallelism includes the caller, and so if n==1

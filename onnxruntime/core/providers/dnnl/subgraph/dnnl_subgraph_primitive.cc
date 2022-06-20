@@ -389,8 +389,17 @@ dnnl::engine DnnlSubgraphPrimitive::GetEngine() {
   return cpu_engine_;
 }
 
-dnnl::stream DnnlSubgraphPrimitive::GetStream() {
+dnnl::stream DnnlSubgraphPrimitive::GetStream(DnnlThreadPoolIface* tp = nullptr) {
+#ifndef DNNL_OPENMP
+  if ((tp == nullptr) || gpu_engine_) {
+    return dnnl::stream(GetEngine());
+  } else {
+    return dnnl::threadpool_interop::make_stream(cpu_engine_, tp);
+  }
+#else
+  ORT_UNUSED_PARAMETER(tp);
   return dnnl::stream(GetEngine());
+#endif //DNNL_OPENMP
 }
 
 void DnnlSubgraphPrimitive::AddInitializers() {
@@ -658,9 +667,12 @@ void DnnlSubgraphPrimitive::AddPrimitive(dnnl::primitive prim, std::unordered_ma
   }
 }
 
-onnxruntime::common::Status DnnlSubgraphPrimitive::Predict(const std::unordered_map<std::string, OnnxTensorData>& inputs, const std::unordered_map<std::string, OnnxTensorData>& outputs) {
-
-  auto stream = GetStream();
+onnxruntime::common::Status DnnlSubgraphPrimitive::Predict(const std::unordered_map<std::string,
+                                                           OnnxTensorData>& inputs,
+                                                           const std::unordered_map<std::string,
+                                                           OnnxTensorData>& outputs,
+                                                           DnnlThreadPoolIface* tp = nullptr) {
+  auto stream = GetStream(tp);
 
   for (auto& input : inputs) {
     if (Contains(inputs_, input.first)) {
