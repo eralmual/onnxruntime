@@ -10,10 +10,12 @@
 
 #include "core/platform/ort_mutex.h"
 #include "dnnl_op_manager.h"
-#include "core/providers/dnnl/subgraph/dnnl_subgraph.h"
-#include "core/providers/dnnl/subgraph/dnnl_subgraph_primitive.h"
+#include "core/providers/dnnl/graph/dnnl_graph.h"
 
 namespace onnxruntime {
+//static long long build_time = 0;
+//static long long comp_time = 0;
+//static long long pred_time = 0;
 
 // Information needed to construct DNNL execution providers.
 struct DNNLExecutionProviderInfo {
@@ -38,10 +40,15 @@ class DNNLExecutionProvider : public IExecutionProvider {
                          std::vector<NodeComputeInfo>& node_compute_funcs) override;
 
  private:
+   // NEW STUFF
+  /* Used to store the Graph and its I/O.
+  To identify each object we use the graph name provided by ORT, with this
+  we get the DnnlGraph, and the name of the input and output tensors also provided by ORT
+  with this we can then use the I/O names to set the data handles into the graph, when available.
+  */ 
+  std::unordered_map<std::string, ort_dnnl::DnnlGraphInfo> graphs_;
   // DnnlOpManager contains information about supported Dnnl Operators
   DnnlOpManager opManager_;
-  std::unordered_map<std::string, std::unique_ptr<ort_dnnl::DnnlSubgraph>> subgraphs_;
-  std::unordered_map<std::string, std::unique_ptr<ort_dnnl::DnnlSubgraphPrimitive>> subgraph_primitives_;
   std::vector<std::vector<NodeIndex>> GetSupportedNodes(const GraphViewer& graph_viewer) const;
   // dump subgraphs to onnx format for debugging purpose
   bool dump_subgraphs_ = false;

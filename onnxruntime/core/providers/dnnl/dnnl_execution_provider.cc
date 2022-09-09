@@ -10,7 +10,8 @@
 #include "dnnl_execution_provider.h"
 #include "dnnl_fwd.h"
 #include "dnnl_node_capability.h"
-#include "core/providers/dnnl/subgraph/dnnl_subgraph_transformer.h"
+
+//#include <iostream>
 
 #include <iomanip>
 #include <fstream>
@@ -255,10 +256,15 @@ std::vector<std::unique_ptr<ComputeCapability>> DNNLExecutionProvider::GetCapabi
 
 Status DNNLExecutionProvider::Compile(const std::vector<FusedNodeAndGraph>& fused_nodes_and_graphs,
                                       std::vector<NodeComputeInfo>& node_compute_funcs) {
-  //follow from coreml ep's Compile
+  // Build tranformer
+  auto transformer = std::make_unique<ort_dnnl::New_DnnlGraphTransformer>();
+  // Iterate over each supported subgraph
   for (auto& fused_node_graph : fused_nodes_and_graphs) {
+    // Get the view to intenal structure of the ONNX graph
     const GraphViewer& graph_body_viewer = fused_node_graph.filtered_graph;
+    // Get info of the whole graph
     const Node& fused_node = fused_node_graph.fused_node;
+
     if (dump_subgraphs_) {
       auto model = graph_body_viewer.CreateModel(*GetLogger());
       auto model_proto = model->ToProto();
@@ -268,87 +274,96 @@ Status DNNLExecutionProvider::Compile(const std::vector<FusedNodeAndGraph>& fuse
       model_proto->SerializeToOstream(dump);
     }
 
-    //subgraph
-    auto dnnl_subgraph = std::make_unique<ort_dnnl::DnnlSubgraph>(ort_dnnl::DnnlSubgraph(graph_body_viewer));
-    subgraphs_.emplace(fused_node.Name(), std::move(dnnl_subgraph));
+    //auto start = std::chrono::high_resolution_clock::now();
+    // Build a DnnlGraph from the ONNX graph view
+    auto dnnl_graph = std::make_unique<ort_dnnl::New_DnnlGraph>(fused_node.Name(), graph_body_viewer);
+    //auto stop = std::chrono::high_resolution_clock::now();
+    //auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
+    //build_time += duration.count();
+    //printf("------------ New graph build time: %lld ms ------------\n", build_time);
+    //transformer->Apply(*dnnl_graph, graph_body_viewer);
 
-    //apply transformation to subgraph
-    if (enable_fusion_) {
-      ort_dnnl::DnnlGraphTransformer().Apply(*subgraphs_[fused_node.Name()].get(), graph_body_viewer);
+    // Store the names of the inputs and outputs so we can get them later
+    // we need to do this now because at this point the ONNX graph does not have
+    // the data handles with the info for the graph, so we have to store the names so 
+    // later we can use then to get the data handles and set them to out graph
+    const auto& input_defs = fused_node.InputDefs();
+    std::vector<std::string> onnx_input_names(input_defs.size());
+    for (size_t i = 0, end = input_defs.size(); i < end; ++i) {
+      onnx_input_names[i] = input_defs[i]->Name();
     }
-
-    //subgraph primitive
-    auto dnnl_subgraph_primitive = std::make_unique<ort_dnnl::DnnlSubgraphPrimitive>(*subgraphs_[fused_node.Name()].get());
-    {
-      const auto& input_defs = fused_node.InputDefs();
-      std::vector<std::string> onnx_input_names(input_defs.size());
-      for (size_t i = 0, end = input_defs.size(); i < end; ++i) {
-        onnx_input_names[i] = input_defs[i]->Name();
-      }
-      dnnl_subgraph_primitive->SetOrderedInputs(std::move(onnx_input_names));
+    const auto& output_defs = fused_node.OutputDefs();
+    std::vector<std::string> onnx_output_names(output_defs.size());
+    for (size_t i = 0, end = output_defs.size(); i < end; ++i) {
+      onnx_output_names[i] = output_defs[i]->Name();
     }
-    {
-      const auto& output_defs = fused_node.OutputDefs();
-      std::vector<std::string> onnx_output_names(output_defs.size());
-      for (size_t i = 0, end = output_defs.size(); i < end; ++i) {
-        onnx_output_names[i] = output_defs[i]->Name();
-      }
-      dnnl_subgraph_primitive->SetOrderedOutputs(std::move(onnx_output_names));
-    }
+    
+    // Store current graph info
+    graphs_[fused_node.Name()] = {std::move(dnnl_graph), std::move(onnx_input_names), std::move(onnx_output_names)};
 
-    subgraph_primitives_.emplace(fused_node.Name(), std::move(dnnl_subgraph_primitive));
-
+    // Build computing functions for the graph execution
     NodeComputeInfo compute_info;
 
+    // Used to get a graph by means of the FunctionState* ptr
     compute_info.create_state_func = [&](ComputeContext* context, FunctionState* state) {
-      *state = subgraph_primitives_[context->node_name].get();
+      *state = graphs_[context->node_name].graph.get();
       return 0;
     };
-
+    // Unused
     compute_info.release_state_func = [](FunctionState state) {
       ORT_UNUSED_PARAMETER(state);
     };
 
-    compute_info.compute_func = [](FunctionState state, const OrtApi* /* api */, OrtKernelContext* context) {
+    compute_info.compute_func = [this](FunctionState state, const OrtApi* /* api */, OrtKernelContext* context) {
       Ort::KernelContext ctx(context);
 
-      ort_dnnl::DnnlSubgraphPrimitive* subgraph_primitive = reinterpret_cast<ort_dnnl::DnnlSubgraphPrimitive*>(state);
-
-      const size_t subgraph_num_inputs = subgraph_primitive->GetOrderedInputs().size();
-      const size_t subgraph_num_outputs = subgraph_primitive->GetOrderedOutputs().size();
+      // Cast to get ptr to the graph built previously
+      ort_dnnl::New_DnnlGraph* graph = reinterpret_cast<ort_dnnl::New_DnnlGraph*>(state);
+      auto graph_io = &graphs_.at(graph->Name());
+      // Get the inputs for the graph 
+      const size_t subgraph_num_inputs = graph_io->input_names.size();
+      const size_t subgraph_num_outputs = graph_io->output_names.size();
       const size_t context_num_outputs = ctx.GetOutputCount();
       const size_t context_num_inputs = ctx.GetInputCount();
 
-      std::unordered_map<std::string, ort_dnnl::OnnxTensorData> inputs;
+      std::unordered_map<std::string, ort_dnnl::New_OnnxTensorData> inputs;
       inputs.reserve(subgraph_num_inputs);
       for (size_t i = 0; i < context_num_inputs; i++) {
-        auto input_name = subgraph_primitive->GetOrderedInputs()[i];
+        auto input_name = graph_io->input_names.at(i);  
         auto input_tensor = ctx.GetInput(i);
         auto tensor_info = input_tensor.GetTensorTypeAndShapeInfo();
         auto shape = tensor_info.GetShape();
         // dnnl expectes non-const data
         void* inputBuffer = const_cast<void*>(input_tensor.GetTensorRawData());
-        inputs.emplace(
-            input_name,
-            ort_dnnl::OnnxTensorData{
-                ort_dnnl::OnnxTensorInfo{tensor_info.GetElementType(), shape},
-                inputBuffer,
-            });
+        inputs.emplace(input_name,    
+                      ort_dnnl::New_OnnxTensorData{
+                          ort_dnnl::New_OnnxTensorInfo{tensor_info.GetElementType(), shape},
+                          inputBuffer,
+                      });
       }
 
       //lock each subgraph_primitive as multiple threads have shared memories
       {
-        std::unique_lock<OrtMutex> lock(subgraph_primitive->GetMutex());
-        subgraph_primitive->Compile(inputs);
-        std::unordered_map<std::string, ort_dnnl::OnnxTensorData> outputs;
+        // Lock the graph
+        std::unique_lock<OrtMutex> lock(graph->GetMutex());
+        // Compile
+        //printf("------------ Compiling graph: %s ------------ \n", graph->Name().c_str());
+        //auto start = std::chrono::high_resolution_clock::now();
+        graph->Compile(inputs);
+        //auto stop = std::chrono::high_resolution_clock::now();
+        //auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
+        //comp_time += duration.count();
+        //printf("------------ New graph compilation time: %lld ms ------------ \n", comp_time);
+        // Get output info
+        std::unordered_map<std::string, ort_dnnl::New_OnnxTensorData> outputs;
         outputs.reserve(subgraph_num_outputs);
         for (size_t i = 0; i < context_num_outputs; i++) {
-          auto output_name = subgraph_primitive->GetOrderedOutputs()[i];
-          auto output_md = subgraph_primitive->GetOutputInfo(output_name);
+          auto& output_name = graphs_[graph->Name()].output_names.at(i);
+          auto output_md = graph->GetTensor(output_name)->MemoryDesc();  // subgraph_primitive->GetOutputInfo(output_name);
           auto output_shape = output_md.dims();
-          //if an output is a scaler, onednn internally uses tensor representation (eg, (1,1,...))
+          //if an output is a scalar, onednn internally uses tensor representation (eg, (1,1,...))
           //but allocating an output with no shape instead of the equivalent tensorshape to avoid shape mismatch
-          if (subgraph_primitive->IsScalarOutput(output_name)) {
+          if (graph->GetTensor(output_name)->IsScalar()) {
             output_shape.clear();
           }
           auto output_tensor =
@@ -357,13 +372,20 @@ Status DNNLExecutionProvider::Compile(const std::vector<FusedNodeAndGraph>& fuse
           auto shape = tensor_info.GetShape();
           void* output_buffer = output_tensor.GetTensorMutableRawData();
           outputs.emplace(output_name,
-                          ort_dnnl::OnnxTensorData{
-                              ort_dnnl::OnnxTensorInfo{tensor_info.GetElementType(), shape},
+                          ort_dnnl::New_OnnxTensorData{
+                              ort_dnnl::New_OnnxTensorInfo{tensor_info.GetElementType(), shape},
                               output_buffer,
                           });
         }
-
-        return subgraph_primitive->Predict(inputs, outputs);
+        // Set data handlers
+        graph->SetDataHandles(inputs, outputs);
+        //start = std::chrono::high_resolution_clock::now();
+        auto x = graph->Predict();
+        //stop = std::chrono::high_resolution_clock::now();
+        //duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
+        //pred_time += duration.count();
+        //printf("------------ New graph prediction time: %lld ms ------------ \n\n", pred_time);
+        return x;  // subgraph_primitive->Predict(inputs, outputs);
       }
     };
 
