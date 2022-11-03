@@ -3,13 +3,13 @@
 
 #pragma once
 
-#include <memory>
 #include <map>
 #include <list>
+#include <memory>
 #include <memory.h>
 
-#include "core/platform/ort_mutex.h"
-#include "dnnl_op_manager.h"
+#include "core/providers/dnnl/dnnl_threadpool.h"
+#include "core/providers/dnnl/dnnl_op_manager.h"
 #include "core/providers/dnnl/subgraph/dnnl_subgraph.h"
 #include "core/providers/dnnl/subgraph/dnnl_subgraph_primitive.h"
 
@@ -18,9 +18,11 @@ namespace onnxruntime {
 // Information needed to construct DNNL execution providers.
 struct DNNLExecutionProviderInfo {
   bool create_arena{true};
+  void* threadpool_args{nullptr};
 
   explicit DNNLExecutionProviderInfo(bool use_arena)
-      : create_arena(use_arena) {}
+      : create_arena(use_arena),
+        threadpool_args(threadpool_args) {}
   DNNLExecutionProviderInfo() = default;
 };
 

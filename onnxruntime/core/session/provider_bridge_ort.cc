@@ -1202,8 +1202,9 @@ CannProviderFactoryCreator::Create(const OrtCANNProviderOptions* provider_option
   return s_library_cann.Get().CreateExecutionProviderFactory(provider_options);
 }
 
-std::shared_ptr<IExecutionProviderFactory> DnnlProviderFactoryCreator::Create(int use_arena) {
-  return s_library_dnnl.Get().CreateExecutionProviderFactory(use_arena);
+std::shared_ptr<IExecutionProviderFactory>
+DnnlProviderFactoryCreator::Create(const OrtDnnlProviderOptions* dnnl_options) {
+  return s_library_dnnl.Get().CreateExecutionProviderFactory(dnnl_options);
 }
 
 std::shared_ptr<IExecutionProviderFactory> TensorrtProviderFactoryCreator::Create(int device_id) {
@@ -1372,9 +1373,11 @@ ProviderOptions GetProviderInfo_Cuda(const OrtCUDAProviderOptionsV2* provider_op
 
 }  // namespace onnxruntime
 
-ORT_API_STATUS_IMPL(OrtSessionOptionsAppendExecutionProvider_Dnnl, _In_ OrtSessionOptions* options, int use_arena) {
+ORT_API_STATUS_IMPL(OrtSessionOptionsAppendExecutionProvider_Dnnl, 
+                    _In_ OrtSessionOptions* options,
+                    _In_ const OrtDnnlProviderOptions* dnnl_options) {
   API_IMPL_BEGIN
-  auto factory = onnxruntime::DnnlProviderFactoryCreator::Create(use_arena);
+  auto factory = onnxruntime::DnnlProviderFactoryCreator::Create(dnnl_options);
   if (!factory) {
     return OrtApis::CreateStatus(ORT_FAIL, "OrtSessionOptionsAppendExecutionProvider_Dnnl: Failed to load shared library");
   }

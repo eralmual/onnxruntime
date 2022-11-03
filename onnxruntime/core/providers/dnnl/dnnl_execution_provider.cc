@@ -5,15 +5,22 @@
 #pragma warning(disable : 4996)
 #endif
 
-#include "core/providers/shared_library/provider_api.h"
+#include "core/providers/dnnl/dnnl_execution_provider.h"
+
+#include <fstream>
+#include <iomanip>
 #include <unordered_set>
-#include "dnnl_execution_provider.h"
-#include "dnnl_fwd.h"
-#include "dnnl_node_capability.h"
+#if defined(DNNL_OPENMP)
+#include <omp.h>
+#endif  // defined(DNNL_OPENMP)
+
+#include "core/platform/ort_mutex.h"
+#include "core/providers/shared_library/provider_api.h"
+
+#include "core/providers/dnnl/dnnl_fwd.h"
+#include "core/providers/dnnl/dnnl_node_capability.h"
 #include "core/providers/dnnl/subgraph/dnnl_subgraph_transformer.h"
 
-#include <iomanip>
-#include <fstream>
 #define ORT_API_MANUAL_INIT
 #include "core/session/onnxruntime_cxx_api.h"
 
@@ -58,6 +65,35 @@ DNNLExecutionProvider::DNNLExecutionProvider(const DNNLExecutionProviderInfo& in
   if (!fusion_env.empty()) {
     enable_fusion_ = (std::stoi(fusion_env) == 0 ? false : true);
   }
+
+  // Set the number of threads specified by the user
+  // If provided arguments set them as the number of threads, else call
+  // calc which usually = numcores
+  auto num_threads = static_cast<int*>(info.threadpool_args);
+#if defined(DNNL_OPENMP)
+  // On Java we have limitations to the number of threads so let OpenMP decide
+#if !defined(DNNL_JAVA)
+  // If the user provided a value select between 3 cases
+  // if num_threads < 0 OpenMP decides the number of threads
+  if (num_threads != nullptr) {
+    // The user provided a valid number of threads
+    if (*num_threads > 0) {
+      omp_set_num_threads(*num_threads);
+    } else if (*num_threads == 0) {
+      // If 0 then the user selected the default num_threads = num_physical_cores
+      omp_set_num_threads(DnnlCalcNumThreads());
+    }
+    // If no value was provided and the env var is not set, we define the number of threads to prevent oversubscription
+  } else if (onnxruntime::GetEnvironmentVar("OMP_NUM_THREADS").empty()) {
+    omp_set_num_threads(DnnlCalcNumThreads());
+  }
+#else
+  ORT_UNUSED_PARAMETER(num_threads);
+#endif  // !defined(DNNL_JAVA)
+  // Log the number of threads used
+  LOGS_DEFAULT(INFO) << "Allocated " << omp_get_max_threads() << " OpenMP threads for oneDNN ep\n";
+#endif  // defined(DNNL_OPENMP)
+
 }  // namespace onnxruntime
 
 DNNLExecutionProvider::~DNNLExecutionProvider() {
