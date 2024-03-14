@@ -189,14 +189,14 @@ void Gemm<MLFloat16>::ComputeGemm(CBLAS_TRANSPOSE trans_a, CBLAS_TRANSPOSE trans
 #if defined(__GNUC__) && defined(HAS_CLASS_MEMACCESS)
 #pragma GCC diagnostic pop
 #endif
-#ifdef MLAS_F16VEC_INTRINSICS_SUPPORTED
-  bool support_mlas = false;
+  bool support_mlas = MlasFp16AccelerationSupported();
+
   if (c_shape == nullptr) {
-    support_mlas = true;
+    support_mlas &= true;
   } else if (c_shape->NumDimensions() == 1 && (*c_shape)[0] == N) {
-    support_mlas = true;
+    support_mlas &= true;
   } else if (c_shape->NumDimensions() == 2 && (((*c_shape)[0] == 1 && (*c_shape)[1] == N) || ((*c_shape)[0] == N && (*c_shape)[1] == 1))) {
-    support_mlas = true;
+    support_mlas &= true;
   }
   if (trans_a == CblasNoTrans && trans_b == CblasNoTrans && support_mlas && alpha.ToFloat() == 1.0 && beta.ToFloat() == 1.0) {
     MLAS_HALF_GEMM_DATA_PARAMS data;
@@ -212,7 +212,7 @@ void Gemm<MLFloat16>::ComputeGemm(CBLAS_TRANSPOSE trans_a, CBLAS_TRANSPOSE trans
     MlasHalfGemmBatch(M, N, K, 1, &data, thread_pool);
     return;
   }
-#endif
+
   // Fallback to Eigen
   // Broadcast the bias as needed if bias is given
   GemmBroadcastBias(M, N, beta, c_data, c_shape, y_data);

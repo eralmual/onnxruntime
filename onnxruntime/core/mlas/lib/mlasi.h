@@ -978,6 +978,16 @@ extern const MLAS_SQNBIT_GEMM_DISPATCH MlasSQNBitGemmDispatchAvx512;
 extern const MLAS_SQNBIT_GEMM_DISPATCH MlasSQNBitGemmDispatchAvx512vnni;
 
 //
+// Half precision matrix/matrix multiply dispatch structure. (HalfGEMM)
+//
+struct MLAS_HALFGEMM_DISPATCH;
+
+extern const MLAS_HALFGEMM_DISPATCH MlasHalfGemmDispatchDefault;
+extern const MLAS_HALFGEMM_DISPATCH MlasHalfGemmDispatchNeon;
+extern const MLAS_HALFGEMM_DISPATCH MlasHalfGemmDispatchAVX2;
+extern const MLAS_HALFGEMM_DISPATCH MlasHalfGemmDispatchAMX;
+
+//
 // Quantized depthwise convolution kernels.
 //
 
@@ -1125,6 +1135,8 @@ struct MLAS_PLATFORM {
     const MLAS_Q8Q4GEMM_DISPATCH* Q8Q4GemmDispatch{nullptr};
 
     const MLAS_SQNBIT_GEMM_DISPATCH* SQNBitGemmDispatch{nullptr};
+
+    const MLAS_HALFGEMM_DISPATCH* HalfGemmDispatch{nullptr};
 };
 
 inline

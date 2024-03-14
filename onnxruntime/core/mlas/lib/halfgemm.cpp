@@ -28,7 +28,7 @@ MlasFp16AccelerationSupported()
 #ifdef MLAS_F16VEC_INTRINSICS_SUPPORTED
     return MLAS_CPUIDINFO::GetCPUIDInfo().HasFp16VectorAcceleration();
 #else
-    return false;
+    return true;  // MLAS_CPUIDINFO::GetCPUIDInfo().HasF16C() && MLAS_CPUIDINFO::GetCPUIDInfo().HasAVX_NE_CONVERT();
 #endif
 }
 

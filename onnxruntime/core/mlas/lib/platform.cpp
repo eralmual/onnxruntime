@@ -245,6 +245,7 @@ Return Value:
     //
 
     this->GemmFloatKernel = MlasGemmFloatKernelSse;
+    this->HalfGemmDispatch = &MlasHalfGemmDispatchDefault;
     this->GemmU8S8Dispatch = &MlasGemmU8X8DispatchSse;
     this->GemmU8U8Dispatch = &MlasGemmU8X8DispatchSse;
 
@@ -402,6 +403,13 @@ Return Value:
                     this->ConvSymU8S8Dispatch = &MlasConvSymDispatchAvxVnni;
                 }
 
+                //
+                // Check if the processor supports AVX_NE_CONVERT and F16C features.
+                //
+                if (((Cpuid7_1[3] & (0b1 << 5)) != 0) && ((Cpuid1[2] & (0b1 << 29)) != 0)) {
+                    this->HalfGemmDispatch = &MlasHalfGemmDispatchAVX2;
+                }
+
 #if !defined(ORT_MINIMAL_BUILD)
 
                 //
@@ -492,6 +500,7 @@ Return Value:
     this->SymmQgemmDispatch = &MlasSymmQgemmS8DispatchNeon;
     this->ConvSymU8S8Dispatch = &MlasConvSymU8DispatchNeon;
     this->ConvSymS8S8Dispatch = &MlasConvSymS8DispatchNeon;
+    this->HalfGemmDispatch = &MlasHalfGemmDispatchNeon;
 
     //
     // Check if the processor supports ASIMD dot product instructions.
