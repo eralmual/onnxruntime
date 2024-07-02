@@ -1034,15 +1034,8 @@ MLASCALL
 MlasConvertHalfToFloatBuffer(
     const unsigned short* Source,
     float* Destination,
-    size_t Count
-    );
-
-extern "C" void
-MLASCALL
-MlasConvertHalfToFloatBufferAVX2(
-    const unsigned short* Source,
-    float* Destination,
-    size_t Count
+    size_t Count,
+    bool useAVX
     );
 
 //
