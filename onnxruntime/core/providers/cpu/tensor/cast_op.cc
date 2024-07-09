@@ -22,9 +22,7 @@
 #include "Eigen/src/Core/arch/Default/BFloat16.h"
 #include "Eigen/src/Core/arch/Default/Half.h"
 
-#if defined(_M_AMD64) && !defined(_M_ARM64EC)
 #include "core/mlas/inc/mlas.h"
-#endif
 
 #include "core/common/cpuid_info.h"
 
@@ -255,20 +253,42 @@ struct TensorCasterNoSat<std::string, DstType> {
 
 #endif
 
-#if defined(_M_AMD64) && !defined(_M_ARM64EC)
-// specializations to use optimized and Windows x64-specific
-// MlasConvertHalfToFloatBuffer() routine for MLFloat16 -> float conversion
-
 // tensor MLFloat16 -> float
+#if (defined(_M_AMD64) && !defined(_M_ARM64EC)) || defined(__x86_64__)
 template <>
 struct TensorCaster<MLFloat16, float> {
   void Cast(const OpKernelContext&, const TensorShape& shape, const Tensor& in, Tensor& out) const {
+#if defined(_MSC_VER)
     auto out_data = out.MutableData<float>();
     auto in_data = in.Data<MLFloat16>();
     const size_t shape_size = narrow<size_t>(shape.Size());
     MlasConvertHalfToFloatBuffer(&in_data[0].val, out_data, shape_size, onnxruntime::CPUIDInfo::GetCPUIDInfo().HasAVX_NE_CONVERT());
+#else
+    if(onnxruntime::CPUIDInfo::GetCPUIDInfo().HasAVX_NE_CONVERT()){
+      auto out_data = out.MutableData<float>();
+      auto in_data = in.Data<MLFloat16>();
+      const size_t shape_size = narrow<size_t>(shape.Size());
+      MlasConvertHalfToFloatBuffer(&in_data[0].val, out_data, shape_size, true);
+    } else {
+      // Use the generic function
+      using SrcEigenCastType = typename EigenCastType<MLFloat16>::type;
+      using DstEigenCastType = typename EigenCastType<float>::type;
+
+      const std::ptrdiff_t shape_size = narrow<std::ptrdiff_t>(shape.Size());
+      const auto in_vector =
+          ConstEigenVectorMap<SrcEigenCastType>(reinterpret_cast<const SrcEigenCastType*>(in.Data<MLFloat16>()), shape_size);
+      auto out_vector =
+          EigenVectorMap<DstEigenCastType>(reinterpret_cast<DstEigenCastType*>(out.MutableData<float>()), shape_size);
+      out_vector = in_vector.template cast<DstEigenCastType>();
+    }
+#endif
   }
 };
+#endif
+
+#if defined(_M_AMD64) && !defined(_M_ARM64EC)
+// specializations to use optimized and Windows x64-specific
+// MlasConvertHalfToFloatBuffer() routine for MLFloat16 -> float conversion
 
 Tensor GetIntermediateMLFloat16ToFloatTensor(
     const OpKernelContext& context, const TensorShape& shape, const Tensor& in) {
