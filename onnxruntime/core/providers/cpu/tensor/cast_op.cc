@@ -264,7 +264,7 @@ struct TensorCaster<MLFloat16, float> {
     const size_t shape_size = narrow<size_t>(shape.Size());
     MlasConvertHalfToFloatBuffer(&in_data[0].val, out_data, shape_size, onnxruntime::CPUIDInfo::GetCPUIDInfo().HasAVX_NE_CONVERT());
 #else
-    if(onnxruntime::CPUIDInfo::GetCPUIDInfo().HasAVX_NE_CONVERT()){
+    if (onnxruntime::CPUIDInfo::GetCPUIDInfo().HasAVX_NE_CONVERT()) {
       auto out_data = out.MutableData<float>();
       auto in_data = in.Data<MLFloat16>();
       const size_t shape_size = narrow<size_t>(shape.Size());

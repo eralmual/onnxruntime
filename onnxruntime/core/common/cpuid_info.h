@@ -21,7 +21,7 @@ class CPUIDInfo {
   bool HasAVX512f() const { return has_avx512f_; }
   bool HasAVX512_BF16() const { return has_avx512_bf16_; }
   bool HasAVX512Skylake() const { return has_avx512_skylake_; }
-  bool HasF16C() const { return has_f16c_; } /*fp16 conversion inst*/
+  bool HasF16C() const { return has_f16c_; }/*fp16 conversion inst*/
   bool HasAVX_NE_CONVERT() const { return has_avx_ne_convert_; } /*fp16/bf16 conversion inst*/
   bool HasSSE3() const { return has_sse3_; }
   bool HasSSE4_1() const { return has_sse4_1_; }
