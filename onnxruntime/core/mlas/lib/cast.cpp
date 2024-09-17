@@ -21,7 +21,7 @@ MlasConvertHalfToFloatBuffer(
     const MLAS_FP16* Source,
     float* Destination,
     size_t Count
-)
+    )
 {
     if (GetMlasPlatform().CastF16ToF32Kernel == nullptr) {
         for (size_t i = 0; i < Count; ++i) {
@@ -29,7 +29,7 @@ MlasConvertHalfToFloatBuffer(
         }
     } else {
         // If the kernel is available, use it to perform the conversion.
-        GetMlasPlatform().CastF16ToF32Kernel(reinterpret_cast<const unsigned short*>(Source), Destination, Count);
+		GetMlasPlatform().CastF16ToF32Kernel(reinterpret_cast<const unsigned short*>(Source), Destination, Count);
     }
 }
 
