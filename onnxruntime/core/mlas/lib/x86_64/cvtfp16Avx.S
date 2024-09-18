@@ -75,6 +75,8 @@ Convert256Vectors:
         jz      ExitRoutine     // If we are done, exit
         cmp     rdx, 16         // If the vector is big enough, we go again
         jae     Convert256Vectors
+        cmp	rdx, 8           // Check if we have enough elements to convert
+        jb      ConvertMaskedVectors
 
 
 
